@@ -1,0 +1,140 @@
+<meta name="dash-one-writer">
+<style>
+  .vc { display: flex; flex-direction: column; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+  .vc h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; }
+  .vc .sim { display: inline-block; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 0 var(--cds-pad-xs); margin-left: var(--cds-gap-sm); vertical-align: middle; }
+  .vc .take { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); }
+  .vc .take b { color: var(--color-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .vc .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: var(--cds-gap-md); }
+  .vc .tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-md); }
+  .vc .tile .lab { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .vc .tile .val { font-family: var(--font-anthropic-serif); font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+  .vc .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: var(--cds-gap-md); }
+  .vc .card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); position: relative; min-width: 0; }
+  .vc .card h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+  .vc .card .note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-xs) 0 var(--cds-gap-sm); }
+  .vc .chart { position: relative; }
+  .vc .chart.h360 { min-height: 360px; } .vc .chart.h260 { min-height: 260px; } .vc .chart.h300 { min-height: 300px; }
+  .vc .chart text { font-family: var(--font-anthropic-sans); }
+  .vc .tick text, .vc .lbl { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .vc .tick line { stroke: var(--cds-chart-grid); }
+  .vc .domain { stroke: var(--cds-chart-axis); }
+  .vc .tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; z-index: 2; }
+  .vc .tip .k { color: var(--cds-text-secondary); }
+  .vc .legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm) var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-top: var(--cds-gap-xs); }
+  .vc .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+  .vc .sw { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 2px; }
+  .vc .tbox { max-height: 26rem; overflow: auto; }
+  .vc table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .vc th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); border-bottom: 1px solid var(--color-border-line); padding: var(--cds-pad-xs); }
+  .vc td { border-bottom: 1px solid var(--color-border-line); padding: var(--cds-pad-xs); vertical-align: top; }
+  .vc td.num, .vc th.num { text-align: right; }
+  .vc .st-ABORTED { color: var(--color-bad); font-weight: 600; }
+  .vc .st-SKIPPED { color: var(--color-warn); font-weight: 600; }
+  [data-dash-source-state=empty] { color: transparent; }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+</style>
+
+<div class="vc">
+  <header>
+    <h1 id="top">VC_ARG_04 · Batch mixing tank, production analytics <span class="sim">Simulated data</span></h1>
+    <p class="take">Simulated run from <b data-draw="run-start" data-source="log">—</b> to <b data-draw="run-end" data-source="log">—</b>:
+      <b data-draw="k-completed2" data-source="kpis" data-field="completed" data-row="0">—</b> batches completed,
+      <b data-draw="k-aborted2" data-source="kpis" data-field="aborted" data-row="0">—</b> aborted by alarms and repeated in full,
+      <b data-draw="k-skipped2" data-source="kpis" data-field="skipped" data-row="0">—</b> cancelled after alarm 6.
+      Good product took <b data-draw="k-good2" data-source="kpis" data-field="good_share" data-row="0">—</b> of the elapsed time.</p>
+  </header>
+
+  <section class="tiles" aria-label="Run totals">
+    <div class="tile"><div class="lab">Batches completed</div><div class="val" data-draw="k-completed" data-source="kpis" data-field="completed" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Batches aborted</div><div class="val" data-draw="k-aborted" data-source="kpis" data-field="aborted" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Batches skipped</div><div class="val" data-draw="k-skipped" data-source="kpis" data-field="skipped" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Litres produced</div><div class="val" data-draw="k-produced" data-source="kpis" data-field="produced_L" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Litres not produced</div><div class="val" data-draw="k-notprod" data-source="kpis" data-field="not_produced_L" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Scrap generated (L)</div><div class="val" data-draw="k-scrap" data-source="kpis" data-field="scrap_L" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Cleanings finished</div><div class="val" data-draw="k-clean" data-source="kpis" data-field="cleanings" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Alarms raised</div><div class="val" data-draw="k-alarms" data-source="kpis" data-field="alarms" data-row="0">—</div></div>
+    <div class="tile"><div class="lab">Time making good product</div><div class="val" data-draw="k-good" data-source="kpis" data-field="good_share" data-row="0">—</div></div>
+  </section>
+
+  <section class="card" id="level">
+    <h2>Tank level over time</h2>
+    <p class="note">5 s samples. Dashed line: overflow limit. Strip below: state. Circled numbers: alarm codes from the event log.</p>
+    <div class="chart h360" data-draw="level" data-source="log events"></div>
+    <div class="legend">
+      <span><i class="sw" style="background: var(--st-0)"></i>Stopped</span>
+      <span><i class="sw" style="background: var(--st-1)"></i>Filling_OP</span>
+      <span><i class="sw" style="background: var(--st-2)"></i>Mixing_OP</span>
+      <span><i class="sw" style="background: var(--st-3)"></i>Empty_OP</span>
+      <span><i class="sw" style="background: var(--st-4)"></i>Waiting</span>
+      <span><i class="sw" style="background: var(--st-5)"></i>Cleaning_OP</span>
+      <span><i class="sw" style="background: var(--st-9)"></i>Alarm Stop</span>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card" id="activity">
+      <h2>Time by activity</h2>
+      <p class="note">Hours in each state, from the state changes in the event log.</p>
+      <div class="chart h260" data-draw="activity" data-source="activity"></div>
+    </div>
+    <div class="card" id="alarms">
+      <h2>Alarms by type</h2>
+      <p class="note">Alarms raised, from the event log; includes alarms that have no report row.</p>
+      <div class="chart h260" data-draw="alarmbars" data-source="alarm_counts"></div>
+    </div>
+    <div class="card" id="ontime">
+      <h2>Valve and motor on-time</h2>
+      <p class="note">Hours each output was on, counted from the 5 s samples.</p>
+      <div class="chart h300" data-draw="ontime" data-source="ontime"></div>
+    </div>
+    <div class="card" id="cumul">
+      <h2>Cumulative litres produced and scrap</h2>
+      <p class="note">Produced: at the OUT of each completed batch. Scrap: running total from the log.</p>
+      <div class="chart h300" data-draw="cumul" data-source="cumul log"></div>
+      <div class="legend"><span><i class="sw" style="background: var(--c0)"></i>Litres produced</span><span><i class="sw" style="background: var(--c1)"></i>Scrap (L)</span></div>
+    </div>
+  </section>
+
+  <section class="card" id="perbatch">
+    <h2>Litres per batch</h2>
+    <p class="note">One bar per report record (# on the axis). Outline: ordered volume. Letters mark status: C completed, A aborted (filled red at the ordered volume, nothing produced), S skipped (cancelled, nothing produced).</p>
+    <div class="chart h300" data-draw="perbatch" data-source="report"></div>
+    <div class="legend">
+      <span><i class="sw" style="background: var(--c0)"></i>C · produced</span>
+      <span><i class="sw" style="background: var(--color-bad); opacity: .55"></i>A · aborted</span>
+      <span><i class="sw" style="border: 1.5px dashed var(--color-warn)"></i>S · skipped</span>
+      <span><i class="sw" style="border: 1.5px solid var(--color-fg-muted)"></i>Ordered</span>
+    </div>
+  </section>
+
+  <section class="card" id="alarmlog">
+    <h2>Alarm log</h2>
+    <p class="note">Every alarm in the event log, with its clock time.</p>
+    <div class="tbox">
+      <table data-source="alarmlog" data-row-key="t,code">
+        <thead><tr><th data-field="clock">Clock</th><th data-field="code" class="num">Code</th><th data-field="batch">Batch ID</th><th data-field="state">State</th><th data-field="detail">Detail</th></tr></thead>
+        <tbody data-draw="alarmlog-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="report">
+    <h2>Production order report</h2>
+    <p class="note">One record per order; repeats appended at the end with "Retry of #m".</p>
+    <div class="tbox">
+      <table data-source="report" data-row-key="n">
+        <thead><tr>
+          <th data-field="n" class="num">#</th><th data-field="batch">Batch ID</th><th data-field="recipe">Recipe</th>
+          <th data-field="vol_order" class="num">Vol. order (L)</th><th data-field="vol_prod" class="num">Vol. produced (L)</th>
+          <th data-field="IN">IN</th><th data-field="OUT">OUT</th><th data-field="process_s" class="num">Process (s)</th>
+          <th data-field="clean_s" class="num">Cleaning (s)</th><th data-field="status">STATUS</th><th data-field="alarms">ALARMS</th><th data-field="remarks">Remarks</th>
+        </tr></thead>
+        <tbody data-draw="report-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script src="calcs.js"></script>
+<script src="charts.js"></script>

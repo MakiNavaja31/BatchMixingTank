@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Batch Mixing Tank HMI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* One visual world: bluish-grey control-room background, white panels, blue + orange accents.
+     Layout: fixed 1920x1080 stage scaled to the window; left = batch and alarms, right = process view. */
+  --bg: #b8c4d2; --bg2: #a9b7c7; --panel: #ffffff; --ink: #172433; --muted: #5b6878; --line: #d6dee8;
+  --blue: #1f6fd1; --orange: #f08a24; --product: #3d85e6; --clean: #1fb3a3; --crit: #d6332a; --ok: #1e8e3e;
+  --font: "Roboto", "Segoe UI", "Helvetica Neue", Arial, sans-serif; --mono: "Roboto Mono", "Consolas", monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: #8e9cad; overflow: hidden; font-family: var(--font); color: var(--ink); }
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0;
+  background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%); }
+.abs { position: absolute; }
+.panel { position: absolute; background: var(--panel); border-radius: 10px; box-shadow: 0 1px 2px rgba(20,40,70,.12), 0 6px 18px rgba(20,40,70,.10); }
+.panel > h2 { margin: 0; padding: 14px 20px 0; font-size: 13px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.panel > h2::before { content: ""; width: 4px; height: 14px; border-radius: 2px; background: var(--blue); }
+.num { font-variant-numeric: tabular-nums; }
+/* header */
+#hdr { left: 0; top: 0; width: 1920px; height: 84px; display: flex; align-items: center; padding: 0 24px; gap: 18px;
+  background: rgba(255,255,255,.55); border-bottom: 1px solid rgba(255,255,255,.7); backdrop-filter: blur(4px); }
+#brand { display: flex; align-items: center; gap: 10px; }
+#brand img { height: 64px; width: auto; display: block; }
+#brand .credit { font-size: 10px; color: var(--muted); align-self: flex-end; margin-bottom: 6px; }
+#title h1 { margin: 0; font-size: 30px; font-weight: 500; letter-spacing: .01em; text-wrap: balance; }
+#title .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+#title .sub b { color: var(--orange); font-weight: 500; }
+#statepill { margin-left: 40px; display: flex; align-items: center; gap: 10px; padding: 8px 18px; border-radius: 999px; background: var(--panel);
+  border: 2px solid var(--line); font-size: 20px; font-weight: 500; min-width: 270px; }
+#statepill .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--muted); }
+#hdr .spacer { flex: 1; }
+#clockbox { text-align: right; }
+#clock { font-family: var(--mono); font-size: 30px; font-weight: 500; }
+#date { font-size: 12px; color: var(--muted); }
+#replay { display: flex; align-items: center; gap: 8px; background: var(--panel); border-radius: 10px; padding: 8px 10px; border: 1px solid var(--line); }
+#replay button, #replay select { font: inherit; font-size: 13px; border: 1px solid var(--line); background: #f3f6fa; color: var(--ink); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+#replay button:hover { border-color: var(--blue); }
+#replay button:focus-visible, #replay select:focus-visible, #scrub:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+#scrub { width: 260px; accent-color: var(--blue); }
+#replay .lab { font-size: 11px; color: var(--muted); }
+/* rows of label/value */
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; font-size: 16px; }
+.kv .k { color: var(--muted); }
+.kv .v { font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
+/* batch panel */
+#pBatch { left: 24px; top: 100px; width: 700px; height: 352px; }
+#batchHead { position: absolute; left: 20px; top: 44px; right: 20px; display: flex; align-items: baseline; gap: 16px; }
+#batchId { font-size: 40px; font-weight: 500; font-family: var(--mono); }
+#batchRec { font-size: 22px; color: var(--blue); font-weight: 500; }
+#batchIdx { margin-left: auto; font-size: 14px; color: var(--muted); }
+#batchKv { position: absolute; left: 20px; top: 104px; width: 300px; }
+#volBox { position: absolute; left: 350px; top: 100px; width: 330px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: #f7f9fc; }
+#volBox label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+#volRow { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+#volIn { width: 120px; font: 500 28px var(--mono); padding: 4px 10px; border: 2px solid var(--blue); border-radius: 6px; background: #fff; color: var(--ink); }
+#volIn:disabled { border-color: var(--line); background: #eef2f6; color: var(--muted); }
+#volRow .u { font-size: 18px; color: var(--muted); }
+#volNote { font-size: 12px; color: var(--muted); margin-top: 6px; }
+#volLock { font-size: 12px; margin-top: 4px; font-weight: 500; }
+#dialog { position: absolute; left: 20px; right: 20px; top: 214px; height: 50px; border-radius: 8px; background: #fff4e8; border: 1px solid var(--orange);
+  display: none; align-items: center; gap: 12px; padding: 0 14px; font-size: 15px; }
+#dialog .grow { flex: 1; }
+#dialog button { font: 500 13px var(--font); border-radius: 6px; padding: 6px 12px; border: 1px solid var(--orange); background: #fff; color: var(--ink); }
+#banner { position: absolute; left: 20px; right: 20px; top: 214px; height: 50px; border-radius: 8px; display: none; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 500; letter-spacing: .08em; }
+#btns { position: absolute; left: 20px; right: 20px; bottom: 18px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.btn { height: 52px; border-radius: 8px; border: 2px solid var(--blue); background: var(--blue); color: #fff; font: 500 15px var(--font); letter-spacing: .02em;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; transition: transform .12s, box-shadow .12s; }
+.btn small { font-size: 10px; font-weight: 400; opacity: .85; }
+.btn.alt { background: #fff; color: var(--blue); }
+.btn.em { background: var(--crit); border-color: var(--crit); }
+.btn.warn { background: var(--orange); border-color: var(--orange); }
+.btn:disabled, .btn.off { background: #edf1f5 !important; border-color: var(--line) !important; color: #9aa6b4 !important; }
+.btn.press { transform: scale(.95); box-shadow: 0 0 0 4px rgba(240,138,36,.55); }
+/* dosing */
+#pDose { left: 24px; top: 468px; width: 700px; height: 262px; }
+#doseTbl { position: absolute; left: 20px; right: 20px; top: 46px; border-collapse: collapse; font-size: 15px; }
+#doseTbl th { text-align: right; font-weight: 400; color: var(--muted); font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+#doseTbl th:first-child, #doseTbl td:first-child { text-align: left; }
+#doseTbl td { padding: 7px 6px; text-align: right; font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--line); }
+#doseTbl td.barc { width: 200px; }
+.bar { height: 10px; border-radius: 5px; background: #e8eef5; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--blue); border-radius: 5px; }
+tr.active td { background: #eef5ff; font-weight: 500; }
+#doseKv { position: absolute; left: 20px; right: 20px; bottom: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.mini { background: #f5f8fb; border-radius: 8px; padding: 8px 12px; }
+.mini .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.mini .v { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* alarm */
+#pAlarm { left: 24px; top: 746px; width: 700px; height: 166px; overflow: hidden; }
+#pAlarm::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--sev, var(--ok)); }
+#alarmMain { position: absolute; left: 28px; top: 44px; right: 20px; display: flex; align-items: center; gap: 14px; }
+#alarmCode { width: 54px; height: 54px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; color: #fff; background: var(--sev, var(--ok)); }
+#alarmName { font-size: 22px; font-weight: 500; }
+#alarmClass { font-size: 12px; color: var(--muted); }
+#alarmText { position: absolute; left: 28px; right: 20px; top: 108px; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#alarmMsg { position: absolute; left: 28px; right: 20px; top: 132px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chips { display: flex; gap: 6px; margin-left: auto; }
+.chip { font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.chip.on { background: var(--orange); border-color: var(--orange); color: #fff; }
+/* counters */
+#pKpi { left: 24px; top: 928px; width: 700px; height: 84px; display: grid; grid-template-columns: repeat(6, 1fr); align-items: center; padding: 0 14px; }
+#pKpi .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+#pKpi .v { font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* process view */
+#pProc { left: 744px; top: 100px; width: 1152px; height: 912px; }
+#proc { position: absolute; left: 0; top: 0; }
+.ov { position: absolute; }
+#stBox { left: 24px; top: 48px; width: 330px; }
+#stName { font-size: 34px; font-weight: 500; }
+#stSub { font-size: 16px; color: var(--muted); margin-top: 4px; min-height: 20px; }
+#stTime { font-size: 14px; color: var(--muted); margin-top: 2px; }
+#lvBox { left: 24px; top: 230px; width: 250px; }
+#lvBig { font-size: 64px; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1; }
+#lvBig small { font-size: 24px; color: var(--muted); margin-left: 6px; }
+#lvPct { font-size: 18px; color: var(--muted); margin: 4px 0 18px; }
+#evBox { left: 838px; top: 48px; width: 296px; }
+#evBox h3, #lgBox h3, #lvBox h3 { margin: 0 0 8px; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+#evList { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+#evList li { display: grid; grid-template-columns: 58px 58px 1fr; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+#evList .t { font-family: var(--mono); color: var(--muted); }
+#evList .ty { font-weight: 500; }
+#evList .d { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#evList .ty.ALARM { color: var(--crit); } #evList .ty.CMD { color: var(--blue); } #evList .ty.REFUSAL { color: var(--orange); } #evList .ty.FAULT { color: #8a4bd6; }
+#lgBox { left: 838px; top: 590px; width: 296px; font-size: 13px; }
+#lgBox .row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.swatch { width: 22px; height: 12px; border-radius: 3px; display: inline-block; }
+#flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+#reject { left: 24px; bottom: 18px; font-size: 13px; color: var(--crit); font-weight: 500; }
+/* svg */
+.pipe { fill: none; stroke: #c3ccd7; stroke-width: 12; stroke-linecap: round; }
+.flow { fill: none; stroke-width: 6; stroke-linecap: round; stroke-dasharray: 10 12; opacity: 0; }
+.flow.on { opacity: 1; animation: flow .8s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -22; } }
+.valve path { stroke: #7d8a99; stroke-width: 2; fill: #fff; }
+.valve.on path { fill: var(--vc, var(--blue)); stroke: var(--vc, var(--blue)); }
+.vlabel { font: 500 13px var(--font); fill: var(--ink); }
+.vsub { font: 400 11px var(--font); fill: var(--muted); }
+.vstate { font: 500 11px var(--mono); fill: var(--muted); letter-spacing: .05em; }
+.vstate.on { fill: var(--blue); }
+.tick { font: 400 12px var(--font); fill: var(--muted); }
+#blades { transform-origin: 550px 600px; }
+#blades.run { animation: spin .6s linear infinite; }
+@keyframes spin { 0% { transform: scaleX(1); } 50% { transform: scaleX(-1); } 100% { transform: scaleX(1); } }
+#footer { left: 0; top: 1024px; width: 1920px; height: 56px; display: flex; align-items: center; padding: 0 24px; font-size: 13px; color: #24364a; gap: 24px; }
+#footer .grow { flex: 1; text-align: center; color: #3b4d61; }
+#footer .warn { font-weight: 500; color: #8f2a1c; }
+@media (prefers-reduced-motion: reduce) { .flow.on, #blades.run { animation: none; } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <header id="hdr" class="abs">
+    <div id="brand"><img src="__LOGO__" alt="Maki and Pope logo"><span class="credit">© del Maestro IvÁ</span></div>
+    <div id="title"><h1>Batch Mixing Tank</h1><div class="sub">VC_ARG_04 · 100 L batch mixing tank · <b>Simulated data</b>, replay of the 5 s readings</div></div>
+    <div id="statepill"><span class="dot"></span><span id="pillTxt">Stopped</span></div>
+    <div class="spacer"></div>
+    <div id="replay" aria-label="Replay controls">
+      <button id="bPlay" type="button">Pause</button>
+      <label class="lab" for="speed">Speed</label>
+      <select id="speed"><option value="1">1×</option><option value="10">10×</option><option value="30">30×</option><option value="60" selected>60×</option><option value="120">120×</option><option value="300">300×</option></select>
+      <input id="scrub" type="range" min="0" max="1" step="5" value="0" aria-label="Replay position">
+      <button id="bNext" type="button">Next alarm</button>
+    </div>
+    <div id="clockbox"><div id="clock" class="num">06:30:00</div><div id="date">01.11.2026 · CET · simulated clock</div></div>
+  </header>
+
+  <section id="pBatch" class="panel" aria-label="Batch">
+    <h2>Batch and operator commands</h2>
+    <div id="batchHead"><span id="batchId">—</span><span id="batchRec">—</span><span id="batchIdx" class="num">—</span></div>
+    <div id="batchKv" class="kv">
+      <span class="k">Order volume</span><span class="v" id="kOrd">—</span>
+      <span class="k">Mixing time</span><span class="v" id="kMix">—</span>
+      <span class="k">Recipe % (Prd_1/2/3)</span><span class="v" id="kPct">—</span>
+      <span class="k">Recipe approved</span><span class="v" id="kAppr">—</span>
+      <span class="k">Last recipe produced</span><span class="v" id="kLast">—</span>
+    </div>
+    <div id="volBox">
+      <label for="volIn">Batch volume (setpoint)</label>
+      <div id="volRow"><input id="volIn" type="number" min="40" max="100" step="1" value="60" disabled aria-describedby="volNote"><span class="u">L</span></div>
+      <div id="volNote">Integer, 40 to 100 L. Editable only when the tank is Stopped or Waiting.</div>
+      <div id="volLock">—</div>
+    </div>
+    <div id="dialog" role="status"><span class="grow" id="dlgTxt">Volume differs from the order. Confirm?</span><button type="button" id="bConf" tabindex="-1">Confirm</button><button type="button" id="bCanc" tabindex="-1">Cancel</button></div>
+    <div id="banner" role="status"></div>
+    <div id="btns">
+      <button class="btn" id="bStart" type="button" tabindex="-1">Start<small>cmdMarcha</small></button>
+      <button class="btn alt" id="bStop" type="button" tabindex="-1">Normal Stop<small>cmdParo</small></button>
+      <button class="btn em" id="bEstop" type="button" tabindex="-1">Emergency Stop<small>cmdParoEmerg</small></button>
+      <button class="btn warn" id="bReset" type="button" tabindex="-1">Reset<small>cmdRearme</small></button>
+      <button class="btn alt" id="bCancel" type="button" tabindex="-1">Cancel batch<small>cmdCancelaLote</small></button>
+    </div>
+  </section>
+
+  <section id="pDose" class="panel" aria-label="Dosing">
+    <h2>Dosing, discharge and scrap</h2>
+    <table id="doseTbl">
+      <thead><tr><th>Product</th><th>Recipe %</th><th>Planned (L)</th><th>Delivered (L)</th><th>Progress</th></tr></thead>
+      <tbody>
+        <tr id="r1"><td>Prd_1 · IN_P1</td><td id="p1">—</td><td id="pl1">—</td><td id="d1">—</td><td class="barc"><div class="bar"><i id="b1" style="width:0"></i></div></td></tr>
+        <tr id="r2"><td>Prd_2 · IN_P2</td><td id="p2">—</td><td id="pl2">—</td><td id="d2">—</td><td class="barc"><div class="bar"><i id="b2" style="width:0"></i></div></td></tr>
+        <tr id="r3"><td>Prd_3 · IN_P3</td><td id="p3">—</td><td id="pl3">—</td><td id="d3">—</td><td class="barc"><div class="bar"><i id="b3" style="width:0"></i></div></td></tr>
+      </tbody>
+    </table>
+    <div id="doseKv">
+      <div class="mini"><div class="k">Discharged to OUT_NORMAL</div><div class="v" id="kDis">—</div></div>
+      <div class="mini"><div class="k">Scrap, this batch</div><div class="v" id="kScB">—</div></div>
+      <div class="mini"><div class="k">Scrap, running total</div><div class="v" id="kScT">—</div></div>
+    </div>
+  </section>
+
+  <section id="pAlarm" class="panel" aria-label="Alarm">
+    <h2>Alarm</h2>
+    <div id="alarmMain"><div id="alarmCode">0</div><div><div id="alarmName">No alarm</div><div id="alarmClass">—</div></div>
+      <div class="chips"><span class="chip" id="c5">5 · Partial batch</span><span class="chip" id="c6">6 · Batch not allowed</span></div></div>
+    <div id="alarmText">—</div>
+    <div id="alarmMsg">—</div>
+  </section>
+
+  <section id="pKpi" class="panel" aria-label="Counters">
+    <div><div class="k">Batches OK</div><div class="v" id="kOK">—</div></div>
+    <div><div class="k">Aborted</div><div class="v" id="kAb">—</div></div>
+    <div><div class="k">Skipped</div><div class="v" id="kSk">—</div></div>
+    <div><div class="k">Cleanings</div><div class="v" id="kCl">—</div></div>
+    <div><div class="k">Last cycle</div><div class="v" id="kCy">—</div></div>
+    <div><div class="k">Not produced</div><div class="v" id="kNp">—</div></div>
+  </section>
+
+  <section id="pProc" class="panel" aria-label="Process view">
+    <h2>Process view · 100 L tank</h2>
+    <svg id="proc" width="1152" height="912" viewBox="0 0 1152 912" role="img" aria-label="Tank, valves, pipes and agitator">
+      <defs>
+        <clipPath id="tankClip"><path d="M382 232 H718 V660 Q718 690 688 690 H412 Q382 690 382 660 Z"/></clipPath>
+        <linearGradient id="glass" x1="0" x2="1"><stop offset="0" stop-color="#eef3f9"/><stop offset=".5" stop-color="#fbfdff"/><stop offset="1" stop-color="#e6edf5"/></linearGradient>
+      </defs>
+      <!-- inlet pipes -->
+      <g id="inlets"></g>
+      <!-- tank -->
+      <path d="M380 230 H720 V660 Q720 692 688 692 H412 Q380 692 380 660 Z" fill="url(#glass)" stroke="#5e6d7f" stroke-width="3"/>
+      <g clip-path="url(#tankClip)">
+        <rect id="liquid" x="380" y="690" width="340" height="0" fill="var(--product)" opacity=".85"/>
+        <rect id="liqTop" x="380" y="690" width="340" height="3" fill="#ffffff" opacity=".5"/>
+      </g>
+      <g id="ticks"></g>
+      <line id="ovf" x1="380" x2="720" stroke="var(--crit)" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <text id="ovfT" x="388" class="tick" fill="var(--crit)">Overflow limit 101 L</text>
+      <g id="sp"><line id="spLine" x1="380" x2="720" stroke="var(--orange)" stroke-width="2" stroke-dasharray="8 5"/><path id="spTri" fill="var(--orange)"/><text id="spT" x="742" class="vlabel" fill="var(--orange)">SP</text></g>
+      <!-- agitator -->
+      <rect x="520" y="166" width="60" height="44" rx="6" fill="#fff" stroke="#5e6d7f" stroke-width="2.5"/>
+      <text x="550" y="194" text-anchor="middle" class="vlabel">M</text>
+      <text id="motT" x="550" y="152" text-anchor="middle" class="vstate">STOPPED</text>
+      <line x1="550" y1="210" x2="550" y2="604" stroke="#5e6d7f" stroke-width="5"/>
+      <g id="blades"><rect x="500" y="594" width="100" height="12" rx="4" fill="#5e6d7f"/><rect x="538" y="588" width="24" height="24" rx="4" fill="#3f4c5c"/></g>
+      <!-- outlets -->
+      <g id="outlets"></g>
+    </svg>
+    <div class="ov" id="stBox"><div id="stName">Stopped</div><div id="stSub">—</div><div id="stTime" class="num">—</div></div>
+    <div class="ov" id="lvBox">
+      <h3>Level</h3>
+      <div id="lvBig">0.0<small>L</small></div>
+      <div id="lvPct">0 % of 100 L (1 L = 1 %)</div>
+      <div class="kv" style="font-size:15px">
+        <span class="k">Setpoint</span><span class="v" id="kSp">—</span>
+        <span class="k">Tank</span><span class="v" id="kTank">—</span>
+        <span class="k">Cleaning reason</span><span class="v" id="kCr">—</span>
+        <span class="k">Report record</span><span class="v" id="kRow">—</span>
+      </div>
+      <div id="flags"><span class="chip" id="fStop">Normal Stop requested</span><span class="chip" id="fRep">Repeat pending</span><span class="chip" id="fEnd">LIST COMPLETE</span></div>
+    </div>
+    <div class="ov" id="evBox"><h3>Events</h3><ul id="evList"></ul></div>
+    <div class="ov" id="lgBox">
+      <h3>Legend</h3>
+      <div class="row"><span class="swatch" style="background:var(--product)"></span>Product in the tank or pipe</div>
+      <div class="row"><span class="swatch" style="background:var(--clean)"></span>Cleaning liquid</div>
+      <div class="row"><svg width="22" height="14"><path d="M1 1 L11 7 L1 13 Z M21 1 L11 7 L21 13 Z" fill="var(--blue)" stroke="var(--blue)"/></svg>Valve OPEN</div>
+      <div class="row"><svg width="22" height="14"><path d="M1 1 L11 7 L1 13 Z M21 1 L11 7 L21 13 Z" fill="#fff" stroke="#7d8a99"/></svg>Valve CLOSED</div>
+      <div class="row"><span class="swatch" style="background:none;border-top:2px dashed var(--orange);height:0"></span>Batch volume setpoint (40 L during cleaning)</div>
+    </div>
+    <div class="ov" id="reject" role="status"></div>
+  </section>
+
+  <footer id="footer" class="abs">
+    <span>Created by Ángel Rodríguez + Claude Opus 5.5 (cc)</span>
+    <span class="grow">Readings replayed from the VC_ARG_04 simulation log, one snapshot every 5 s; commands are shown as logged, not sent</span>
+    <span class="warn">Emergency Stop is not a safety function</span>
+  </footer>
+</div>
+
+<script>/*__DATA__*/</script>
+<script>
+(() => {
+  const P = window.SIM, F = P.fields, N = P.rows.length;
+  const IDX = Object.fromEntries(F.map((f, i) => [f, i]));
+  const STR = new Set(P.str);
+  const $ = (id) => document.getElementById(id);
+  const ST = { 0: 'Stopped', 1: 'Filling_OP', 2: 'Mixing_OP', 3: 'Empty_OP', 4: 'Waiting', 5: 'Cleaning_OP', 9: 'Alarm Stop' };
+  const SUB = { 0: '', 1: 'Sub-step 1 · scrap to OUT_SCRAP', 2: 'Sub-step 2 · fill cleaning liquid', 3: 'Sub-step 3 · mix', 4: 'Sub-step 4 · drain to OUT_RECYCLE' };
+  const REASON = { 0: '—', 1: 'Pre-batch', 2: 'Normal Stop', 3: 'After alarm' };
+  const ALARM = { 0: ['No alarm', '—'], 1: ['Overflow', 'Emergency · Alarm Stop'], 2: ['Emergency Stop', 'Emergency · Alarm Stop'],
+    3: ['Fill deviation', 'Controlled · scrap, clean, repeat'], 4: ['Step timeout / no progress', 'Emergency · Alarm Stop'],
+    5: ['Partial batch', 'Warning, with its cause'], 6: ['Batch not allowed', 'Warning · blocks Start'] };
+  const SEV = { 0: 'var(--ok)', 1: 'var(--crit)', 2: 'var(--crit)', 3: 'var(--orange)', 4: 'var(--crit)', 5: 'var(--orange)', 6: 'var(--orange)' };
+  const STCOL = { 0: '#7d8a99', 1: 'var(--blue)', 2: 'var(--blue)', 3: 'var(--blue)', 4: 'var(--orange)', 5: 'var(--clean)', 9: 'var(--crit)' };
+  const snap = (i) => { const r = P.rows[i], o = {}; F.forEach((f, k) => { o[f] = STR.has(f) ? P.strings[r[k]] : r[k]; }); return o; };
+  const fmt1 = (v) => Number(v).toFixed(1);
+  const set = (id, v) => { const e = $(id); if (e && e.textContent !== String(v)) e.textContent = v; };
+
+  // ---------- static SVG: scale, inlets, outlets
+  const Y = (L) => 690 - L * (460 / 110);
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; parent.append(e); return e; };
+  const ticks = $('ticks');
+  for (let L = 0; L <= 100; L += 20) {
+    mk('line', { x1: 368, x2: 380, y1: Y(L), y2: Y(L), stroke: '#5e6d7f', 'stroke-width': 1.5 }, ticks);
+    mk('text', { x: 362, y: Y(L) + 4, 'text-anchor': 'end', class: 'tick' }, ticks, `${L} L`);
+  }
+  $('ovf').setAttribute('y1', Y(101)); $('ovf').setAttribute('y2', Y(101)); $('ovfT').setAttribute('y', Y(101) - 5);
+  const valve = (g, x, y, id, vc) => { const v = mk('g', { class: 'valve', id: 'v_' + id, style: vc ? `--vc:${vc}` : '' }, g);
+    mk('path', { d: `M${x - 14} ${y - 10} L${x} ${y} L${x - 14} ${y + 10} Z M${x + 14} ${y - 10} L${x} ${y} L${x + 14} ${y + 10} Z` }, v); return v; };
+  const inl = $('inlets');
+  const pill = (g, x, y, id) => { mk('rect', { x: x - 27, y: y - 9, width: 54, height: 18, rx: 9, fill: '#fff', stroke: '#c3ccd7' }, g);
+    return mk('text', { x, y: y + 4, 'text-anchor': 'middle', class: 'vstate', id: 's_' + id }, g, 'CLOSED'); };
+  const INL = [['IN_P1', 405, 'Prd_1', '1.0 L/s'], ['IN_P2', 478, 'Prd_2', '1.0 L/s'], ['IN_P3', 622, 'Prd_3', '0.5 L/s'], ['IN_CLEAN', 695, 'Cleaning', '1.0 L/s']];
+  for (const [id, x, nm, rate] of INL) {
+    const yTop = id === 'IN_P1' || id === 'IN_CLEAN' ? 70 : 118;
+    mk('path', { class: 'pipe', d: `M${x} ${yTop} V230` }, inl);
+    mk('path', { class: 'flow', id: 'f_' + id, d: `M${x} ${yTop} V230`, stroke: id === 'IN_CLEAN' ? 'var(--clean)' : 'var(--product)' }, inl);
+    valve(inl, x, 168, id, id === 'IN_CLEAN' ? 'var(--clean)' : null);
+    mk('text', { x, y: yTop - 34, 'text-anchor': 'middle', class: 'vlabel' }, inl, id);
+    mk('text', { x, y: yTop - 20, 'text-anchor': 'middle', class: 'vsub' }, inl, nm);
+    mk('text', { x, y: yTop - 7, 'text-anchor': 'middle', class: 'vsub' }, inl, rate);
+    pill(inl, x, 208, id);
+  }
+  const out = $('outlets');
+  const OUTL = [['OUT_NORMAL', 430, 'Final product', '0.2 L/s'], ['OUT_SCRAP', 550, 'Scrap sink', '1.0 L/s'], ['OUT_RECYCLE', 670, 'Recycling tank', '1.0 L/s']];
+  for (const [id, x, nm, rate] of OUTL) {
+    mk('path', { class: 'pipe', d: `M${x} 692 V820` }, out);
+    mk('path', { class: 'flow', id: 'f_' + id, d: `M${x} 692 V820`, stroke: id === 'OUT_RECYCLE' ? 'var(--clean)' : 'var(--product)' }, out);
+    mk('path', { d: `M${x - 9} 818 L${x} 834 L${x + 9} 818 Z`, fill: '#9aa7b6' }, out);
+    valve(out, x, 760, id, id === 'OUT_RECYCLE' ? 'var(--clean)' : null);
+    pill(out, x, 794, id);
+    mk('text', { x, y: 856, 'text-anchor': 'middle', class: 'vlabel' }, out, id);
+    mk('text', { x, y: 872, 'text-anchor': 'middle', class: 'vsub' }, out, nm);
+    mk('text', { x, y: 886, 'text-anchor': 'middle', class: 'vsub' }, out, rate);
+  }
+
+  // ---------- snapshot check (spec §10): reject incomplete or out-of-range, keep last valid
+  const RANGE = { pvNivel_L: [0, 130], stSubLimpieza: [0, 4], stProducto: [0, 3], stAlarma: [0, 6], stMotivoLimpieza: [0, 3] };
+  const check = (o) => {
+    for (const f of F) if (o[f] === undefined || o[f] === null) return f;
+    if (![0, 1, 2, 3, 4, 5, 9].includes(o.stEtapa)) return 'stEtapa';
+    for (const [f, [a, b]] of Object.entries(RANGE)) if (!(o[f] >= a && o[f] <= b)) return f;
+    return null;
+  };
+
+  // ---------- render one estado snapshot
+  let liquid = 'product', lastValid = null;
+  const render = (o, lvl) => {
+    const bad = check(o);
+    if (bad) { set('reject', `Snapshot rejected: ${bad}. Showing the last valid reading.`); if (!lastValid) return; o = lastValid; }
+    else { set('reject', ''); lastValid = o; }
+    const st = o.stEtapa, sub = o.stSubLimpieza;
+    liquid = o.liq ? 'clean' : 'product';
+    // header state
+    set('pillTxt', ST[st]); document.querySelector('#statepill .dot').style.background = STCOL[st];
+    $('statepill').style.borderColor = STCOL[st];
+    set('stName', ST[st]); $('stName').style.color = STCOL[st];
+    set('stSub', st === 5 ? SUB[sub] : st === 1 && o.stProducto ? `Dosing Prd_${o.stProducto}` : st === 9 ? 'All outputs off, level frozen' : st === 4 ? 'Empty, tank dirty, between batches' : '—');
+    set('stTime', `Step time ${fmt1(o.tEtapa_s)} s`);
+    // valves, pipes, motor
+    for (const v of ['IN_P1', 'IN_P2', 'IN_P3', 'IN_CLEAN', 'OUT_NORMAL', 'OUT_SCRAP', 'OUT_RECYCLE']) {
+      const on = o['st' + v] === 1;
+      $('v_' + v).classList.toggle('on', on); $('f_' + v).classList.toggle('on', on);
+      const s = $('s_' + v); s.textContent = on ? 'OPEN' : 'CLOSED'; s.classList.toggle('on', on);
+    }
+    $('f_OUT_SCRAP').setAttribute('stroke', liquid === 'clean' ? 'var(--clean)' : 'var(--product)');
+    const mot = o.stMOT === 1; $('blades').classList.toggle('run', mot);
+    const mt = $('motT'); mt.textContent = mot ? 'AGITATOR RUNNING' : 'AGITATOR STOPPED'; mt.classList.toggle('on', mot);
+    // level, liquid, setpoint
+    const yl = Y(Math.max(0, lvl));
+    $('liquid').setAttribute('y', yl); $('liquid').setAttribute('height', Math.max(0, 690 - yl));
+    $('liquid').setAttribute('fill', liquid === 'clean' ? 'var(--clean)' : 'var(--product)');
+    $('liqTop').setAttribute('y', yl); $('liqTop').setAttribute('opacity', lvl > 0.05 ? .5 : 0);
+    $('lvBig').firstChild.nodeValue = fmt1(lvl);
+    set('lvPct', `${Math.round(lvl)} % of 100 L (1 L = 1 %)`);
+    const cleaningSp = st === 5 && sub >= 2;
+    const sp = cleaningSp ? 40 : o.volLote_L;
+    $('sp').style.display = sp > 0 ? '' : 'none';
+    if (sp > 0) { const ys = Y(sp); $('spLine').setAttribute('y1', ys); $('spLine').setAttribute('y2', ys);
+      $('spTri').setAttribute('d', `M722 ${ys} L736 ${ys - 7} L736 ${ys + 7} Z`); $('spT').setAttribute('y', ys + 5);
+      $('spT').textContent = `SP ${sp} L`; }
+    set('kSp', sp > 0 ? (cleaningSp ? '40 L (cleaning)' : `${sp} L`) : '—');
+    set('kTank', o.stTanqueSucio ? 'Dirty' : 'Clean');
+    set('kCr', st === 5 ? REASON[o.stMotivoLimpieza] : '—');
+    set('kRow', o.reportRow ? `#${o.reportRow}` : '—');
+    $('fStop').classList.toggle('on', !!o.stParoSolicitado); $('fRep').classList.toggle('on', !!o.stReintento); $('fEnd').classList.toggle('on', !!o.stListaCompleta);
+    // batch panel
+    const has = !!o.loteId;
+    set('batchId', has ? o.loteId : '—'); set('batchRec', has ? o.recetaId : '—');
+    set('batchIdx', has ? `Order ${o.loteIdx} of ${o.loteTotal}` : `${o.loteTotal} orders`);
+    set('kOrd', has ? `${o.volOrden_L} L` : '—'); set('kMix', has ? `${o.tMezclaRec_s} s` : '—');
+    set('kPct', has ? o.recPct.join(' / ') + ' %' : '—'); set('kAppr', has ? (o.recetaAprobada ? 'YES' : 'NO') : '—');
+    set('kLast', o.ultimaReceta || 'unknown');
+    const idle = (st === 0 || st === 4);
+    const startOk = idle && !o.stLoteRechazado && !o.stListaCompleta && has;
+    const vin = $('volIn'); vin.disabled = !idle || !!o.stReintento || !has;
+    if (has && String(vin.value) !== String(o.volLote_L)) vin.value = o.volLote_L;
+    set('volLock', !idle ? 'Locked: process running' : o.stReintento ? 'Repeat: keeps the interrupted volume' : !has ? 'No pending batch' : 'Editable');
+    $('volLock').style.color = !idle || o.stReintento ? 'var(--muted)' : 'var(--ok)';
+    // dialog / banner
+    $('dialog').style.display = o.stConfirmaVol ? 'flex' : 'none';
+    if (o.stConfirmaVol) set('dlgTxt', `Volume order ${o.volOrden_L} L, entered value differs. Confirm?`);
+    const bn = $('banner');
+    const bTxt = o.stListaCompleta ? 'LIST COMPLETE · use Normal Stop for the final cleaning' : o.stLoteRechazado ? 'BATCH NOT ALLOWED · Cancel batch to continue' : '';
+    bn.style.display = !o.stConfirmaVol && bTxt ? 'flex' : 'none'; bn.textContent = bTxt;
+    bn.style.background = o.stListaCompleta ? '#e8f1ff' : '#fff4e8'; bn.style.color = o.stListaCompleta ? 'var(--blue)' : '#a8540f';
+    // buttons (spec §11)
+    $('bStart').classList.toggle('off', !startOk);
+    $('bStop').classList.toggle('off', !(([1, 2, 3, 4].includes(st) || (st === 5 && o.stMotivoLimpieza === 1)) && !o.stParoSolicitado));
+    $('bEstop').classList.toggle('off', !(st >= 1 && st <= 5));
+    $('bReset').classList.toggle('off', st !== 9);
+    $('bCancel').classList.toggle('off', !o.stLoteRechazado);
+    // dosing
+    for (let p = 1; p <= 3; p++) {
+      const pl = o.plan_L[p - 1], d = o.dos_L[p - 1];
+      set('p' + p, has ? o.recPct[p - 1] + ' %' : '—'); set('pl' + p, pl ? fmt1(pl) : '—'); set('d' + p, pl ? fmt1(d) : '—');
+      $('b' + p).style.width = pl ? Math.min(100, (d / pl) * 100) + '%' : '0';
+      $('r' + p).classList.toggle('active', st === 1 && o.stProducto === p);
+    }
+    set('kDis', `${fmt1(o.volDescargado_L)} L`); set('kScB', `${fmt1(o.volScrapLote_L)} L`); set('kScT', `${fmt1(o.volScrapTotal_L)} L`);
+    // alarm
+    const a = o.stAlarma;
+    $('pAlarm').style.setProperty('--sev', SEV[a]);
+    set('alarmCode', a); set('alarmName', ALARM[a][0]);
+    set('alarmClass', a ? `${ALARM[a][1]} · origin ${o.stAlarmaOrigen === 2 ? 'operator' : o.stAlarmaOrigen === 1 ? 'machine' : '—'}` : 'Process normal');
+    set('alarmText', a ? o.stAlarmaTexto || '—' : '—');
+    set('alarmMsg', o.stMensaje ? `Message: ${o.stMensaje}` : '');
+    $('c5').classList.toggle('on', !!o.stLoteParcial); $('c6').classList.toggle('on', !!o.stLoteRechazado);
+    // counters
+    set('kOK', o.kpiLotesOK); set('kAb', o.kpiLotesAbort); set('kSk', o.kpiLotesCancel); set('kCl', o.kpiLimpiezas);
+    set('kCy', o.kpiUltimoCiclo_s ? `${fmt1(o.kpiUltimoCiclo_s)} s` : '—'); set('kNp', `${fmt1(o.volNoProducido_L)} L`);
+  };
+
+  // ---------- replay clock
+  const T0 = P.rows[0][IDX.t], T1 = P.rows[N - 1][IDX.t];
+  const [dd, mm, yy] = P.date.split('.');
+  const base = Date.UTC(+yy, +mm - 1, +dd, ...P.time0.split(':').map(Number));
+  const hms = (t) => new Date(base + t * 1000).toISOString().slice(11, 19);
+  let simT = T0, speed = 60, playing = true, lastReal = performance.now(), evShown = -1;
+  const scrub = $('scrub'); scrub.min = T0; scrub.max = T1;
+  const BTN = { cmdMarcha: 'bStart', cmdParo: 'bStop', cmdParoEmerg: 'bEstop', cmdRearme: 'bReset', cmdCancelaLote: 'bCancel', cmdConfirmaVol: 'bConf', cmdCancelaVol: 'bCanc' };
+  const evIdx = (t) => { let lo = 0, hi = P.events.length; while (lo < hi) { const m = (lo + hi) >> 1; if (P.events[m][0] <= t) lo = m + 1; else hi = m; } return lo - 1; };
+  const showEvents = (upto) => {
+    const ul = $('evList'); ul.replaceChildren();
+    for (let i = upto; i >= Math.max(0, upto - 11); i--) {
+      const [t, ty, b, d] = P.events[i];
+      const li = document.createElement('li');
+      const a = document.createElement('span'); a.className = 't'; a.textContent = hms(t);
+      const c = document.createElement('span'); c.className = 'ty ' + ty; c.textContent = ty;
+      const e = document.createElement('span'); e.className = 'd'; e.textContent = (b ? b + ' · ' : '') + d; e.title = d;
+      li.append(a, c, e); ul.append(li);
+    }
+  };
+  const flash = (from, to) => {
+    for (let i = from + 1; i <= to; i++) {
+      const [, ty, , d] = P.events[i];
+      if (ty !== 'CMD') continue;
+      const b = $(BTN[d.split(' ')[0]]); if (!b) continue;
+      b.classList.add('press'); setTimeout(() => b.classList.remove('press'), 450);
+    }
+  };
+  const frame = (now) => {
+    const dt = Math.min(0.25, (now - lastReal) / 1000); lastReal = now;
+    if (playing) { simT += dt * speed; if (simT >= T1) { simT = T1; playing = false; $('bPlay').textContent = 'Play'; } }
+    const k = Math.min(N - 1, Math.max(0, Math.floor((simT - T0) / 5)));
+    const o = snap(k);
+    const nx = P.rows[Math.min(N - 1, k + 1)];
+    const f = Math.min(1, Math.max(0, (simT - P.rows[k][IDX.t]) / 5));
+    const lvl = o.pvNivel_L + (nx[IDX.pvNivel_L] - o.pvNivel_L) * f;
+    render(o, lvl);
+    set('clock', hms(simT));
+    if (document.activeElement !== scrub) scrub.value = simT;
+    const ei = evIdx(simT);
+    if (ei !== evShown) { if (ei > evShown && ei - evShown < 20) flash(evShown, ei); showEvents(ei); evShown = ei; }
+    requestAnimationFrame(frame);
+  };
+  $('bPlay').addEventListener('click', () => { playing = !playing; if (simT >= T1) simT = T0; $('bPlay').textContent = playing ? 'Pause' : 'Play'; });
+  $('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
+  scrub.addEventListener('input', () => { simT = Number(scrub.value); });
+  $('bNext').addEventListener('click', () => {
+    const nxt = P.events.find((e) => e[1] === 'ALARM' && e[0] > simT + 21);
+    if (nxt) simT = Math.max(T0, nxt[0] - 20);
+  });
+  document.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); $('bPlay').click(); } });
+  // fit the 1920x1080 stage to the window (1:1 at Full HD)
+  const fit = () => { const s = Math.min(innerWidth / 1920, innerHeight / 1080); const st = $('stage');
+    st.style.transform = `scale(${s})`; st.style.left = (innerWidth - 1920 * s) / 2 + 'px'; st.style.top = (innerHeight - 1080 * s) / 2 + 'px'; };
+  addEventListener('resize', fit); fit();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
