@@ -1,4 +1,4 @@
-Batch Mixing Tank is a Vibe Coding Industrial experiment (Digitalización Férriz). It takes a 100 L batch mixing tank from a written operation specification to a tested digital twin, built together with Claude Opus 5.5.
+Batch Mixing Tank is a Vibe Coding Industrial experiment (based on Digitalización Férriz youtube channel). It takes a 100 L batch mixing tank from a written operation specification to a tested digital twin, built together with Claude Opus 5.5.
 
 The specification is the single source of truth. From it, a Python simulator (100 ms tick) runs a full simulated production day of 56 batches with injected faults: overflow, fill deviation, blocked valves, emergency and normal stops, and batches that aren’t allowed to run. The run produces:
 
